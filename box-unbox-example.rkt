@@ -10,4 +10,9 @@
   (minus 50 50)
   )
 
-:test
+(define (test a b)
+  (+ (* a b) (- a b)))
+
+
+
+(+ (let () (define x 12)) x)
