@@ -5,4 +5,9 @@
   (+ x y)
   )
 
+(facet (lambda (x) #t) 1 3)
+(let ([minus -])
+  (minus 50 50)
+  )
+
 :test
