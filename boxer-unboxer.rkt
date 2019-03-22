@@ -7,17 +7,16 @@
 (define-syntax-class facet
   ;#:literals (facet)
   (pattern [(~literal facet #:phase -1) guard private public]
-           
            ))
 
+
+; How do I make this not produce false positives
 (define (was-boxed? boxed-vars to-check)
   (if (identifier? to-check)
-      (foldl (lambda (a b) (or a b)) #f (map (curry bound-identifier=? to-check) boxed-vars))
+      (foldl (lambda (a b) (or a b)) #f (map (lambda (var) (bound-identifier=? to-check var -1)) boxed-vars))
       #f
       )
   )
-
-
 
 (define (boxer-unboxer-helper boxed-vars stx)
   (let ([new-boxed-vars boxed-vars])
@@ -74,3 +73,13 @@
 (define (boxer-unboxer stx)
   (car (boxer-unboxer-helper (set) stx))
   )
+
+; Questions:
+; How do I detect variables?
+; How do I detect if a variable is being defined vs being used?
+; Why isn't bound-identifier=? working as I expect?
+; Will I need a specific thing for every way a variable could be created, or
+;   is there some better way to detect variable definition / binding?
+; Would it be better to (expand stx) to racket/base before trying to
+;   box / unbox all the variables?
+; I can traverse the AST. What should the overall design structure of new Racets be?

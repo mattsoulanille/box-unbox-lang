@@ -15,4 +15,9 @@
 
 
 
-(+ (let () (define x 12)) x)
+(define x 12)
+
+(let ([x 5])
+  
+  (+ x 4)
+  )
