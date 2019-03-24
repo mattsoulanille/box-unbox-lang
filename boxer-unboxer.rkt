@@ -1,6 +1,6 @@
 #lang racket
 (provide boxer-unboxer)
-(require syntax/parse syntax/strip-context)
+(require syntax/parse syntax/strip-context racket/syntax)
 (require syntax/kerncase)
 
 
@@ -26,16 +26,18 @@
        ; by redefinitions. Sadly, when they point to the literal + and - es of this
        ; context, they can't see the ones of the context of stx if stx has different context.
        ; Addendum: Phases fix this. See below.
-       [fac:facet #'fac.public]; same as (attribute fac.public)?
+       ;[fac:facet #'fac.public]; same as (attribute fac.public)?
        ; #:phase -1 indicates that we want to go one level down in phase
        ; higher up means more macro-ey and lower down means more code-we're-executing-ey
        ; to put it in super impercise terms. All phase levels are relative to the code you're
        ; executing with that code being at phase level 0. Look it up for more detail.
-       [(~literal - #:phase -1) #'+]
-       [(~literal + #:phase -1) #'-]
+       ;[(~literal - #:phase -1) #'+]
+       ;[(~literal + #:phase -1) #'-]
        ;[(~datum :test) #'(print "yep, working")]
        ; Recursively call this on all the syntax
        ; Without replace-context, things like #%app get lost and functions don't work
+
+
        [((~literal define #:phase -1) var:identifier val:expr)
         (set! new-boxed-vars (set-add boxed-vars #'var))
         (replace-context stx #'(define var (box val)))
@@ -43,23 +45,7 @@
      
        [(any ...)
         ; Todo: Make this pass the boxed-vars set correctly!
-        #:with recursed #`(#,@(let ([as-list (syntax-e #'(any ...))])
-                                (define (recursive-apply-box-unbox boxed-vars syntax-list)
-                                  (if (equal? syntax-list null)
-                                      (let ()
-                                        (set! new-boxed-vars boxed-vars); Side effect!
-                                        null
-                                        )
-                                      (let* ([res (boxer-unboxer-helper boxed-vars (car syntax-list))]
-                                             [resulting-stx (car res)]
-                                             [new-boxed-vars (cdr res)])
-                                        (cons resulting-stx
-                                              (recursive-apply-box-unbox new-boxed-vars (cdr syntax-list)))
-                                        )
-                                  ))
-                                (recursive-apply-box-unbox boxed-vars (syntax-e stx))
-                               ))
-                               ;map car (map (curry boxer-unboxer-helper boxed-vars) (syntax-e #`(any ...)))))
+        #:with recursed (map car (map (curry boxer-unboxer-helper boxed-vars) (syntax-e #`(any ...))))
         (replace-context stx #'recursed)]
        ; todo: Check if it's actually being used as a variable. But how?
        [single (if (was-boxed? (set->list boxed-vars) #'single)
@@ -70,9 +56,39 @@
      new-boxed-vars)
   ))
 
+(define (box-stx stx)
+  #`(box #,stx))
+(define (unbox-stx stx)
+  #`(unbox #,stx))
+
+
 (define (boxer-unboxer stx)
-  (car (boxer-unboxer-helper (set) stx))
+  (syntax-parse stx
+    [((~literal define-values #:phase -1) (var:identifier) val:expr)
+     (replace-context stx #`(define-values (var) (box val)))]
+    
+    [((~literal let-values #:phase -1) ([(var:identifier) val:expr] ...) body ...)
+     #:with (assignment ...) (replace-context stx #`([(var) (box val)] ...))
+     #:with (transformed-body ...) #`(#,@(map boxer-unboxer
+                                          (map (curry replace-context stx)
+                                               (syntax->list #'(body ...)))))
+                                                             
+     (replace-context stx #`(let-values (assignment ...) transformed-body ...))]
+     
+     
+    
+    [((~literal #%app #:phase -1) func:identifier vars:identifier ...)
+     (replace-context stx #`(#%app func #,@(map unbox-stx (syntax-e #'(vars ...)))))]
+    
+    ;[(~datum :test) #'(print "yep, working")]
+    [(any ...)
+     #:with recursed (map boxer-unboxer (syntax-e #`(any ...)))
+     (replace-context stx #'recursed)]
+    [single #'single]
+    )
   )
+
+        
 
 ; Questions:
 ; How do I detect variables?

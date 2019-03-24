@@ -17,11 +17,18 @@
 (define-syntax (box-unbox-module-begin stx)
   (let ([result
          (syntax-parse stx
-           ; plain-module-begin from LAL p5
-           [(module-begin expr ...)
-            #:with core-forms (local-expand #`(#%plain-module-begin expr ...)
+           ; plain-module-begin from LAL p5. p3
+           ; Is "the base module wrapper" Adds no new semantics.
+           ; Why does it run out of memory when I use plain-module-begin?
+           ; https://docs.racket-lang.org/reference/module.html?q=local-expand#%28form._%28%28lib._racket%2Fprivate%2Fbase..rkt%29._~23~25plain-module-begin%29%29
+           [(module-begin forms ...)
+            #:with core-forms (local-expand #`(#%plain-module-begin forms ...)
                                             'module-begin '())
-            #'core-forms
+            #:with boxed-unboxed (boxer-unboxer #'core-forms)
+            #:with (_ form ...) #'boxed-unboxed
+            #'(#%module-begin form ...); Why can't this be plain-module-begin?
+            
+            
             ]
            )
          ])
