@@ -17,9 +17,12 @@
 
 (define x 12)
 (print x)
+(set! x 5)
+(print x)
+
 ;(let ([x 5])
 ;  (+ x 4)
 ;  )
-;(map + (list 1 2 3))
+(map + (list 1 2 3))
 
 ;(require macro-debugger/syntax-browser)

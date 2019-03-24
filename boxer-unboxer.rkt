@@ -64,19 +64,24 @@
 
 (define (boxer-unboxer stx)
   (syntax-parse stx
+    ; define-values
     [((~literal define-values #:phase -1) (var:identifier) val:expr)
      (replace-context stx #`(define-values (var) (box val)))]
-    
+
+    ; let-values
     [((~literal let-values #:phase -1) ([(var:identifier) val:expr] ...) body ...)
      #:with (assignment ...) (replace-context stx #`([(var) (box val)] ...))
      #:with (transformed-body ...) #`(#,@(map boxer-unboxer
                                           (map (curry replace-context stx)
                                                (syntax->list #'(body ...)))))
-                                                             
-     (replace-context stx #`(let-values (assignment ...) transformed-body ...))]
-     
-     
+     (replace-context stx #'(let-values (assignment ...) transformed-body ...))]
+
+    ; set!
+    [((~literal set! #:phase -1) var:identifier val:expr)
+     #:with to-set-as (boxer-unboxer #'val)
+     (replace-context stx #'(set-box! var to-set-as))]
     
+    ; function application
     [((~literal #%app #:phase -1) func:identifier vars:identifier ...)
      (replace-context stx #`(#%app func #,@(map unbox-stx (syntax-e #'(vars ...)))))]
     
