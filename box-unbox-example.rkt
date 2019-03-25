@@ -39,19 +39,41 @@
 ;                (string-append foo bar baz)
 ;                ) "foobarbaz")
 
+;(define-values (foo bar baz) (values "foo" "bar" "baz"))
+
+
+
+;(println (string-append foo bar baz))
 ;(define-values (single) "hello")
 ;(print single)
 
+;(let-values ([(x y z) (values 1 2 3)]
+;             [(foo bar baz) (values "foo" "bar" "baz")]
+;             [(q r) (quotient/remainder 32767 2)])
+;  (println (+ x y z))
+;  (println (string-append foo bar baz))
+;  (println q)
+;  (println r)
+;  )
+
+(let ([x 4]) (println x) (+ x 1))
+
+;(let-values ([(x y) (values (let ([x 4]) (println x) (+ x 1)) 10)])
+;  (+ x y)
+;  )
 
 
+;(define x 4)
+;(define y 5)
+;(+ (- x 12) (* x y) x)
 
 
 ;(map + (list 1 2 3))
 
-(define recur1 42)
-(define recur2 recur1)
-(define recur3 recur2)
-(print recur3)
+;(define recur1 42)
+;(define recur2 recur1)
+;(define recur3 recur2)
+;(print recur3)
 
 ;(define func-test +)
 

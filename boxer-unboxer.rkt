@@ -18,6 +18,17 @@
 (define (box-unbox-list context-stx stx-list)
   (map-stx-list context-stx boxer-unboxer stx-list))
 
+; TODO: Make sure it's okay to use the same context for each inner
+; one as the outer one
+(define (map-stx context-stx stx-procedure stx)
+  (replace-context
+   context-stx
+   #`(#,@(map-stx-list context-stx stx-procedure (syntax->list stx)))))
+  
+
+(define (box-unbox-map-stx context-stx stx)
+  (map-stx context-stx boxer-unboxer stx))
+
 ; Same as map but for multiple values instead of a list
 (define (map-values stx)
   (syntax-parse stx
@@ -33,18 +44,21 @@
 (define (boxer-unboxer stx)
   (syntax-parse stx
     ; define-values
-    [((~literal define-values #:phase -1) (var:identifier ...) val:expr ...)
+    [((~literal define-values #:phase -1) (var:identifier ...) vals:expr)
      ; Necessary so that functions that return multiple values get their values boxed properly.
      ; NOTE: values are not the same as arguments. You can't just use a function that takes multiple
      ; arguments on a `multiple value` multiple values are stored in the same argument. It's weird.
-     (replace-context stx #`(define-values (var ...) #,(map-values #'(box val ...))))]
+     #:with boxed-unboxed (boxer-unboxer #'vals)
+     (replace-context stx #`(define-values (var ...) #,(map-values #'(box boxed-unboxed))))]
 
     
     ; let-values
-    [((~literal let-values #:phase -1) ([(var:identifier) val:expr] ...) body ...)
-     #:with (assignment ...) (replace-context stx #`([(var) (box val)] ...))
-     #:with (transformed-body ...) #`(#,@(box-unbox-list stx (syntax->list #'(body ...))))
-     (replace-context stx #'(let-values (assignment ...) transformed-body ...))]
+    [((~literal let-values #:phase -1) ([(var:identifier ...) vals:expr] ...) body ...)
+     #:with (transformed-vals ...) (box-unbox-map-stx stx #'(vals ...))
+     #:with (boxed-vals ...) #`(#,@(map (lambda (v) (replace-context stx (map-values #`(box #,v))))
+                                (syntax->list #'(transformed-vals ...))))
+     #:with (transformed-body ...) (box-unbox-map-stx stx #'(body ...))
+     (replace-context stx #'(let-values ([(var ...) boxed-vals] ...) transformed-body ...))]
 
     ; set!
     [((~literal set! #:phase -1) var:identifier val:expr)
@@ -52,8 +66,15 @@
      (replace-context stx #'(set-box! var to-set-as))]
     
     ; function application
-    [((~literal #%app #:phase -1) func:identifier vars:identifier ...)
-     (replace-context stx #`(#%app func #,@(map unbox-stx (syntax-e #'(vars ...)))))]
+    ; If it's an identifier, unbox it.
+    [((~literal #%app #:phase -1) func:identifier vars ...)
+     #:with (identifiers-unboxed ...) (map-stx stx (lambda (x)
+                                               (if (identifier? x)
+                                                   (unbox-stx x)
+                                                   x)
+                                               )
+                                         #'(vars ...))
+     (replace-context stx #`(#%app func identifiers-unboxed ...))]
     
     ;[(~datum :test) #'(print "yep, working")]
     [(any ...)
