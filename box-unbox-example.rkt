@@ -56,7 +56,10 @@
 ;  (println r)
 ;  )
 
-(let ([x 4]) (println x) (+ x 1))
+(let ([x 4]) (println x) (+ 1 x) (println x))
+
+(define my-identity identity)
+(println (my-identity "test"))
 
 ;(let-values ([(x y) (values (let ([x 4]) (println x) (+ x 1)) 10)])
 ;  (+ x y)
