@@ -61,19 +61,38 @@
 (define (unbox-stx stx)
   #`(unbox #,stx))
 
+            
+(define (map-stx-list context-stx stx-procedure stx-list)
+  (map stx-procedure
+       (map (curry replace-context context-stx) stx-list)))
 
+(define (box-unbox-list context-stx stx-list)
+  (map-stx-list context-stx boxer-unboxer stx-list))
+
+
+
+; See https://docs.racket-lang.org/reference/syntax.html
+; for a list of all racket/base syntactic forms.
 (define (boxer-unboxer stx)
   (syntax-parse stx
     ; define-values
-    [((~literal define-values #:phase -1) (var:identifier) val:expr)
-     (replace-context stx #`(define-values (var) (box val)))]
+    [((~literal define-values #:phase -1) (var:identifier ...) val:expr ...)
+     #:with (transformed-val ...) (box-unbox-list stx (syntax->list #'(val ...)))
+     ;#:with (boxed-val ...) (map-stx-list stx box-stx (syntax->list #'(transformed-val ...)))
+     ; Necessary so that functions that return multiple values get their values boxed properly.
+     ; NOTE: values are not the same as arguments. You can't just use a function that takes multiple
+     ; arguments on a `multiple value` multiple values are stored in the same argument. It's weird.
+     #:with boxer-func #`(lambda (returns-vals)
+                           (call-with-values returns-vals
+                                             (lambda args (map box args))))
+     #:with boxed-vals #`(apply values (boxer-func (lambda () val ...)))
+     (replace-context stx #`(define-values (var ...) boxed-vals))]
 
+    
     ; let-values
     [((~literal let-values #:phase -1) ([(var:identifier) val:expr] ...) body ...)
      #:with (assignment ...) (replace-context stx #`([(var) (box val)] ...))
-     #:with (transformed-body ...) #`(#,@(map boxer-unboxer
-                                          (map (curry replace-context stx)
-                                               (syntax->list #'(body ...)))))
+     #:with (transformed-body ...) #`(#,@(box-unbox-list stx (syntax->list #'(body ...))))
      (replace-context stx #'(let-values (assignment ...) transformed-body ...))]
 
     ; set!
