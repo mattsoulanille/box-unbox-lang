@@ -1,5 +1,7 @@
 #lang s-exp "box-unbox-module.rkt"
 
+
+;(require rackunit)
 ;(- 4 5)
 ;(let ([x 4] [y 5])
 ;  (+ x y)
@@ -30,8 +32,19 @@
 ;  (+ x 4)
 ;  )
 
-(define-values (foo bar baz) (values "foo" "bar" "baz"))
-(print (list foo bar baz))
+
+;(check-equal? 4 4)
+;(check-equal? (let ()
+;                (define-values (foo bar baz) (values "foo" "bar" "baz"))
+;                (string-append foo bar baz)
+;                ) "foobarbaz")
+
+;(define-values (single) "hello")
+;(print single)
+
+
+
+
 
 ;(map + (list 1 2 3))
 
@@ -40,6 +53,6 @@
 (define recur3 recur2)
 (print recur3)
 
-(define func-test +)
+;(define func-test +)
 
 ;(require macro-debugger/syntax-browser)
