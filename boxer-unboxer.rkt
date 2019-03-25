@@ -3,6 +3,7 @@
 (require syntax/parse syntax/strip-context racket/syntax)
 (require syntax/kerncase)
 
+(require (for-syntax syntax/parse))
 
 (define-syntax-class facet
   ;#:literals (facet)
@@ -69,7 +70,18 @@
 (define (box-unbox-list context-stx stx-list)
   (map-stx-list context-stx boxer-unboxer stx-list))
 
-
+; Same as map but for multiple values instead of a list
+(define (map-values stx)
+  (syntax-parse stx
+    [(func vals)
+     #:with vals-lambda #'(lambda () vals)
+     #:with res-list #'(call-with-values vals-lambda (lambda args (map func args)))
+     #'(apply values res-list)]
+    )
+  )
+     
+      
+  
 
 ; See https://docs.racket-lang.org/reference/syntax.html
 ; for a list of all racket/base syntactic forms.
@@ -77,16 +89,10 @@
   (syntax-parse stx
     ; define-values
     [((~literal define-values #:phase -1) (var:identifier ...) val:expr ...)
-     #:with (transformed-val ...) (box-unbox-list stx (syntax->list #'(val ...)))
-     ;#:with (boxed-val ...) (map-stx-list stx box-stx (syntax->list #'(transformed-val ...)))
      ; Necessary so that functions that return multiple values get their values boxed properly.
      ; NOTE: values are not the same as arguments. You can't just use a function that takes multiple
      ; arguments on a `multiple value` multiple values are stored in the same argument. It's weird.
-     #:with boxer-func #`(lambda (returns-vals)
-                           (call-with-values returns-vals
-                                             (lambda args (map box args))))
-     #:with boxed-vals #`(apply values (boxer-func (lambda () val ...)))
-     (replace-context stx #`(define-values (var ...) boxed-vals))]
+     (replace-context stx #`(define-values (var ...) #,(map-values #'(box val ...))))]
 
     
     ; let-values
