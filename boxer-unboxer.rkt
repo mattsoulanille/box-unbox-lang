@@ -5,14 +5,11 @@
 
 (require (for-syntax syntax/parse))
 
-
-
 (define (box-stx stx)
   #`(box #,stx))
-
 (define (unbox-stx stx)
   #`(unbox #,stx))
-  
+
             
 (define (map-stx-list context-stx stx-procedure stx-list)
   (map stx-procedure
@@ -42,31 +39,17 @@
     )
   )
 
-(define (was-boxed var boxed-vars)
-  (ormap identity (map (lambda (compareto)
-                   (and (identifier? var) (free-identifier=? var compareto))
-                   ) boxed-vars))
-  )
-
-
 ; See https://docs.racket-lang.org/reference/syntax.html
 ; for a list of all racket/base syntactic forms.
-; Whenever we box something, we set the syntax-property 'boxed to true.
-; https://docs.racket-lang.org/reference/stxprops.html
-(define (boxer-unboxer-helper stx boxed-vars)
+(define (boxer-unboxer stx)
   (syntax-parse stx
     ; define-values
     [((~literal define-values #:phase -1) (var:identifier ...) vals:expr)
      ; Necessary so that functions that return multiple values get their values boxed properly.
      ; NOTE: values are not the same as arguments. You can't just use a function that takes multiple
      ; arguments on a `multiple value` multiple values are stored in the same argument. It's weird.
-     #:with boxed-unboxed (boxer-unboxer-helper #'vals)
-     (let ([new-boxed-vars (set-union boxed-vars (list->set (syntax->list #'(var ...))))])
-       (cons
-        (replace-context stx #`(define-values (var ...) #,(map-values #'(box boxed-unboxed))))
-        new-boxed-vars)
-       
-       )]
+     #:with boxed-unboxed (boxer-unboxer #'vals)
+     (replace-context stx #`(define-values (var ...) #,(map-values #'(box boxed-unboxed))))]
 
     
     ; let-values
@@ -75,34 +58,31 @@
      #:with (boxed-vals ...) #`(#,@(map (lambda (v) (replace-context stx (map-values #`(box #,v))))
                                 (syntax->list #'(transformed-vals ...))))
      #:with (transformed-body ...) (box-unbox-map-stx stx #'(body ...))
-     #:with all-vars #'(var ... ...)
-     (let ([new-boxed-vars (set-union boxed-vars (list->set (syntax->list #'all-vars)))])
-       (cons
-        (replace-context stx #'(let-values ([(var ...) boxed-vals] ...) transformed-body ...))
-        new-boxed-vars)
-       )]
+     (replace-context stx #'(let-values ([(var ...) boxed-vals] ...) transformed-body ...))]
 
     ; set!
     [((~literal set! #:phase -1) var:identifier val:expr)
-     #:with to-set-as (boxer-unboxer-helper #'val boxed-vars)
+     #:with to-set-as (boxer-unboxer #'val)
      (replace-context stx #'(set-box! var to-set-as))]
+    
+    ; function application
+    ; If it's an identifier, unbox it.
+    [((~literal #%app #:phase -1) func:identifier vars ...)
+     #:with (identifiers-unboxed ...) (map-stx stx (lambda (x)
+                                               (if (identifier? x)
+                                                   (unbox-stx x)
+                                                   x)
+                                               )
+                                         #'(vars ...))
+     (replace-context stx #`(#%app func identifiers-unboxed ...))]
     
     ;[(~datum :test) #'(print "yep, working")]
     [(any ...)
-     #:with recursed (map boxer-unboxer-helper (syntax-e #`(any ...)))
+     #:with recursed (map boxer-unboxer (syntax-e #`(any ...)))
      (replace-context stx #'recursed)]
-
-    [var:id
-     (if (was-boxed #'var boxed-vars)
-         (unbox-stx #'var)
-         #'var)]
     [single #'single]
-  ))
-
-(define (boxer-unboxer stx)
-  (boxer-unboxer-helper stx (set))
+    )
   )
-                             
 
         
 
