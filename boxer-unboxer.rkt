@@ -39,12 +39,16 @@
     )
   )
 
+
 ; See https://docs.racket-lang.org/reference/syntax.html
 ; for a list of all racket/base syntactic forms.
+
+; ~! means "if you get to here, don't consider any other possible forms
+;           and fail if it doesn't end up matching"
 (define (boxer-unboxer stx)
   (syntax-parse stx
     ; define-values
-    [((~literal define-values #:phase -1) (var:identifier ...) vals:expr)
+    [((~literal define-values #:phase -1) ~! (var:identifier ...) vals:expr)
      ; Necessary so that functions that return multiple values get their values boxed properly.
      ; NOTE: values are not the same as arguments. You can't just use a function that takes multiple
      ; arguments on a `multiple value` multiple values are stored in the same argument. It's weird.
@@ -53,7 +57,7 @@
 
     
     ; let-values
-    [((~literal let-values #:phase -1) ([(var:identifier ...) vals:expr] ...) body ...)
+    [((~literal let-values #:phase -1) ~! ([(var:identifier ...) vals:expr] ...) body ...)
      #:with (transformed-vals ...) (box-unbox-map-stx stx #'(vals ...))
      #:with (boxed-vals ...) #`(#,@(map (lambda (v) (replace-context stx (map-values #`(box #,v))))
                                 (syntax->list #'(transformed-vals ...))))
@@ -61,17 +65,17 @@
      (replace-context stx #'(let-values ([(var ...) boxed-vals] ...) transformed-body ...))]
 
     ; set!
-    [((~literal set! #:phase -1) var:identifier val:expr)
+    [((~literal set! #:phase -1) ~! var:identifier val:expr)
      #:with to-set-as (boxer-unboxer #'val)
      (replace-context stx #'(set-box! var to-set-as))]
     
     ; function application
     ; If it's an identifier, unbox it.
-    [((~literal #%app #:phase -1) func:identifier vars ...)
+    [((~literal #%app #:phase -1) ~! func:identifier vars ...)
      #:with (identifiers-unboxed ...) (map-stx stx (lambda (x)
                                                (if (identifier? x)
                                                    (unbox-stx x)
-                                                   x)
+                                                   (boxer-unboxer x))
                                                )
                                          #'(vars ...))
      (replace-context stx #`(#%app func identifiers-unboxed ...))]
