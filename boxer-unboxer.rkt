@@ -26,8 +26,8 @@
    #`(#,@(map-stx-list context-stx stx-procedure (syntax->list stx)))))
   
 
-(define (box-unbox-map-stx context-stx stx)
-  (map-stx context-stx boxer-unboxer stx))
+(define (box-unbox-map-stx context-stx stx boxed-vars)
+  (map-stx context-stx boxer-unboxer-helper stx boxed-vars))
 
 ; Same as map but for multiple values instead of a list
 (define (map-values stx)
@@ -39,34 +39,46 @@
     )
   )
 
+; Checks if an identifier is bound to something in a list of identifiers.
+(define (identifier-in-list ident id-list)
+  (define (or-func a b) (or a b))
+  (if (identifier? ident)
+      (foldl or-func #f (map (lambda (other) (bound-identifier=? ident other -1)) id-list))
+      #f
+  ))
+  
+
 
 ; See https://docs.racket-lang.org/reference/syntax.html
 ; for a list of all racket/base syntactic forms.
 
 ; ~! means "if you get to here, don't consider any other possible forms
 ;           and fail if it doesn't end up matching"
-(define (boxer-unboxer stx)
-  (syntax-parse stx
+(define (boxer-unboxer-helper stx boxed-vars)
+  (define new-boxed-vars  boxed-vars)
+  (cons (syntax-parse stx
     ; define-values
     [((~literal define-values #:phase -1) ~! (var:identifier ...) vals:expr)
      ; Necessary so that functions that return multiple values get their values boxed properly.
      ; NOTE: values are not the same as arguments. You can't just use a function that takes multiple
      ; arguments on a `multiple value` multiple values are stored in the same argument. It's weird.
-     #:with boxed-unboxed (boxer-unboxer #'vals)
+     #:do [(set! new-boxed-vars (append new-boxed-vars (syntax->list #'(var ...))))]
+     #:with boxed-unboxed (boxer-unboxer-helper #'vals new-boxed-vars)
      (replace-context stx #`(define-values (var ...) #,(map-values #'(box boxed-unboxed))))]
 
     
     ; let-values
     [((~literal let-values #:phase -1) ~! ([(var:identifier ...) vals:expr] ...) body ...)
-     #:with (transformed-vals ...) (box-unbox-map-stx stx #'(vals ...))
+     #:do [(set! new-boxed-vars (append new-boxed-vars (syntax->list #'(var ... ...))))]
+     #:with (transformed-vals ...) (box-unbox-map-stx stx #'(vals ...) new-boxed-vars)
      #:with (boxed-vals ...) #`(#,@(map (lambda (v) (replace-context stx (map-values #`(box #,v))))
                                 (syntax->list #'(transformed-vals ...))))
-     #:with (transformed-body ...) (box-unbox-map-stx stx #'(body ...))
+     #:with (transformed-body ...) (box-unbox-map-stx stx #'(body ...) new-boxed-vars)
      (replace-context stx #'(let-values ([(var ...) boxed-vals] ...) transformed-body ...))]
 
     ; set!
     [((~literal set! #:phase -1) ~! var:identifier val:expr)
-     #:with to-set-as (boxer-unboxer #'val)
+     #:with to-set-as (boxer-unboxer-helper #'val new-boxed-vars)
      (replace-context stx #'(set-box! var to-set-as))]
     
     ; function application
@@ -75,17 +87,33 @@
      #:with (identifiers-unboxed ...) (map-stx stx (lambda (x)
                                                (if (identifier? x)
                                                    (unbox-stx x)
-                                                   (boxer-unboxer x))
+                                                   x)
                                                )
                                          #'(vars ...))
+     ;(print #`(#%app func identifiers-unboxed ...))
      (replace-context stx #`(#%app func identifiers-unboxed ...))]
     
     ;[(~datum :test) #'(print "yep, working")]
     [(any ...)
-     #:with recursed (map boxer-unboxer (syntax-e #`(any ...)))
+     #:with recursed #`(#,@(let ([stx-list (syntax->list #'(any ...))])
+                                              (for/list ([stx-item stx-list])
+                                              ;(print vars-list)
+                                              
+                                              (let* ([result (boxer-unboxer-helper stx-item new-boxed-vars)]
+                                                     [new-stx (car result)])
+                                                (set! new-boxed-vars (cdr result))
+                                                new-stx))))
+
+     ;(map (lambda (x) (boxer-unboxer-helper x new-boxed-vars)) (syntax-e #`(any ...)))
      (replace-context stx #'recursed)]
-    [single #'single]
-    )
+    [single (if (identifier-in-list #'single new-boxed-vars)
+                (unbox-stx #'single)
+                #'single)]
+    ) new-boxed-vars)
+  )
+
+(define (boxer-unboxer stx)
+  (car (boxer-unboxer-helper stx (list)))
   )
 
         
