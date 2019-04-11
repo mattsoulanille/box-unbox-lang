@@ -63,7 +63,11 @@
      ; NOTE: values are not the same as arguments. You can't just use a function that takes multiple
      ; arguments on a `multiple value` multiple values are stored in the same argument. It's weird.
      #:do [(set! new-boxed-vars (append new-boxed-vars (syntax->list #'(var ...))))]
-     #:with boxed-unboxed (boxer-unboxer-helper #'vals new-boxed-vars)
+     #:with boxed-unboxed (let ([boxed-result (boxer-unboxer-helper #'vals new-boxed-vars)])
+                            (set! new-boxed-vars (cdr boxed-result))
+                            (car boxed-result)
+                            )
+     (print #'boxed-unboxed)
      (replace-context stx #`(define-values (var ...) #,(map-values #'(box boxed-unboxed))))]
 
     
