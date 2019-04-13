@@ -64,11 +64,12 @@
 ;(let-values ([(x y) (values (let ([x 4]) (println x) (+ x 1)) 10)])
 ;  (+ x y)
 ;  )
+(define x identity)
+(x 12345)
 
-
-(define x 4)
-(define y 5)
-(+ (- x 12) (* x y) x)
+;(define x 4)
+;(define y 5)
+;(+ (- x 12) (* x y) x)
 
 
 ;(map + (list 1 2 3))

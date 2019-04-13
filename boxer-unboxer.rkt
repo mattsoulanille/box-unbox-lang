@@ -67,7 +67,7 @@
                             (set! new-boxed-vars (cdr boxed-result))
                             (car boxed-result)
                             )
-     (print #'boxed-unboxed)
+     ;(print #'boxed-unboxed)
      (replace-context stx #`(define-values (var ...) #,(map-values #'(box boxed-unboxed))))]
 
     
@@ -117,7 +117,10 @@
   )
 
 (define (boxer-unboxer stx)
-  (car (boxer-unboxer-helper stx (list)))
+  (let ([result (boxer-unboxer-helper stx (list))])
+    ;(print (cdr result))
+    (car result)
+    )
   )
 
         
