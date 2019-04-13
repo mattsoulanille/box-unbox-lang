@@ -85,19 +85,6 @@
      #:with to-set-as (boxer-unboxer-helper #'val new-boxed-vars)
      (replace-context stx #'(set-box! var to-set-as))]
     
-    ; function application
-    ; If it's an identifier, unbox it.
-    ;[((~literal #%app #:phase -1) ~! func:identifier vars ...)
-;     #:with (identifiers-unboxed ...) (map-stx stx (lambda (x)
- ;                                              (if (identifier? x)
-  ;                                                 (unbox-stx x)
-   ;                                                x)
-;                                               )
- ;                                        #'(vars ...))
-     ;(print #`(#%app func identifiers-unboxed ...))
-  ;   (replace-context stx #`(#%app func identifiers-unboxed ...))]
-    
-    ;[(~datum :test) #'(print "yep, working")]
     [(any ...)
      #:with recursed #`(#,@(let ([stx-list (syntax->list #'(any ...))])
                                               (for/list ([stx-item stx-list])
