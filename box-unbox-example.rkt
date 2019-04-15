@@ -1,11 +1,15 @@
-#lang s-exp "box-unbox-module.rkt"
+#lang s-exp syntax/module-reader "box-unbox-module.rkt"
 
 
-;(require rackunit)
+(require rackunit)
 ;(- 4 5)
 ;(let ([x 4] [y 5])
 ;  (+ x y)
 ;  )
+
+(check-equal? #t #t)
+(define x 12)
+(check-equal? x 12)
 
 ;(facet (lambda (x) #t) 1 3)
 ;(let ([minus -])
@@ -64,8 +68,20 @@
 ;(let-values ([(x y) (values (let ([x 4]) (println x) (+ x 1)) 10)])
 ;  (+ x y)
 ;  )
-(define x identity)
-(x 12345)
+;(define x identity)
+;(x 12345)
+
+;(let ([identity "Broken"]) identity)
+;(print identity)
+;(let ([x 4])
+;  (define test 12345)
+;  x)
+
+;(define-syntax (bar stx)
+;  stx
+;  )
+
+
 
 ;(define x 4)
 ;(define y 5)
