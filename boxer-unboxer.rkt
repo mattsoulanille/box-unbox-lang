@@ -27,7 +27,7 @@
   
 
 (define (box-unbox-map-stx context-stx stx boxed-vars)
-  (map-stx context-stx boxer-unboxer-helper stx boxed-vars))
+  (map-stx context-stx (lambda (stx) (boxer-unboxer-helper stx boxed-vars)) stx))
 
 ; Same as map but for multiple values instead of a list
 (define (map-values stx)
@@ -74,10 +74,14 @@
     ; let-values
     [((~literal let-values #:phase -1) ~! ([(var:identifier ...) vals:expr] ...) body ...)
      #:do [(set! new-boxed-vars (append new-boxed-vars (syntax->list #'(var ... ...))))]
-     #:with (transformed-vals ...) (box-unbox-map-stx stx #'(vals ...) new-boxed-vars)
+     #:with (transformed-vals ...) (car (boxer-unboxer-helper #'(vals ...) boxed-vars))
+     ;(box-unbox-map-stx stx #'(vals ...) new-boxed-vars)
      #:with (boxed-vals ...) #`(#,@(map (lambda (v) (replace-context stx (map-values #`(box #,v))))
                                 (syntax->list #'(transformed-vals ...))))
-     #:with (transformed-body ...) (box-unbox-map-stx stx #'(body ...) new-boxed-vars)
+     #:with (transformed-body ...) (car (boxer-unboxer-helper #'(body ...) new-boxed-vars))
+     ;(box-unbox-map-stx stx #'(body ...) new-boxed-vars)
+     ;(print #'(vals ...))
+     ;(print #'(transformed-vals ...))
      (replace-context stx #'(let-values ([(var ...) boxed-vals] ...) transformed-body ...))]
 
     ; set!
