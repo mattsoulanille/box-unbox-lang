@@ -1,15 +1,15 @@
-#lang s-exp syntax/module-reader "box-unbox-module.rkt"
+#lang s-exp "box-unbox-module.rkt"
 
 
-(require rackunit)
+;(require rackunit)
 ;(- 4 5)
-;(let ([x 4] [y 5])
-;  (+ x y)
-;  )
+(let ([x 4] [y 5])
+  (+ x y)
+  )
 
-(check-equal? #t #t)
-(define x 12)
-(check-equal? x 12)
+;(check-equal? #t #t)
+;(define x 12)
+;(check-equal? x 12)
 
 ;(facet (lambda (x) #t) 1 3)
 ;(let ([minus -])
