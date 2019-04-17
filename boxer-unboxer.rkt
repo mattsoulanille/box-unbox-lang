@@ -3,7 +3,10 @@
 (require syntax/parse syntax/strip-context racket/syntax)
 (require syntax/kerncase)
 
-(require (for-syntax syntax/parse))
+
+(require "box-unbox-syntax-classes.rkt")
+
+;(require syntax/parse/lib/function-header)
 
 (define (box-stx stx)
   #`(box #,stx))
@@ -47,6 +50,8 @@
       #f
   ))
   
+
+
 
 
 ; See https://docs.racket-lang.org/reference/syntax.html
@@ -96,7 +101,25 @@
      ; Function Declarations
      ; All variables given to the function are assumed to have been boxed by
      ; the Function Calls handler above.
-     ;[((~literal 
+     ; TODO: Make it work for rest
+     [((~literal #%plain-lambda #:phase -1) ~! f:formals body ...+)
+      #:with (transformed-body ...) (car (boxer-unboxer-helper
+                                          #'(body ...)
+                                          (append new-boxed-vars (syntax->list #'f.args))))
+      (replace-context stx #'(#%plain-lambda f.args transformed-body ...))]
+
+     [((~literal case-lambda #:phase -1) ~! [f:formals body ...+] ...)
+      #:with ([transformed-body ...] ...)
+      (map-stx stx (lambda (f-body)
+                     (syntax-parse f-body
+                       [(fname:formals body ...) 
+                        (car (boxer-unboxer-helper
+                              #'(body ...)
+                              (append new-boxed-vars (syntax->list #'fname.args))))]
+                        )
+                     ) #'([f body ...] ...))
+      (replace-context stx #'(case-lambda [f transformed-body ...] ...))]
+      
      
      ; let-values
      [((~literal let-values #:phase -1) ~! ([(var:identifier ...) vals:expr] ...) body ...)

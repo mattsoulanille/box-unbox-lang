@@ -1,5 +1,10 @@
 #lang s-exp "box-unbox-module.rkt"
 
+(define (test a) (print a))
+
+
+((#%plain-lambda rest (print rest)) (list 1 2 3))
+
 
 ;(require rackunit)
 ;(- 4 5)
@@ -7,8 +12,17 @@
   ;(f 4)
   ;)
 ;(print "Hello")
-(define (f x) (print x))
-(f "hi")
+;(#%plain-lambda (x) x)
+;(let ([f (case-lambda
+;            [() 10]
+;            [(x) x]
+;            [(x y) (list y x)]
+;            [r r])])
+;    (list (f)
+;          (f 1)
+;          (f 1 2)
+;          (f 1 2 3)))
+
 
 ;(check-equal? #t #t)
 ;(define x 12)
