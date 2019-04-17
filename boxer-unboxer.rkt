@@ -43,7 +43,7 @@
 (define (identifier-in-list ident id-list)
   (define (or-func a b) (or a b))
   (if (identifier? ident)
-      (foldl or-func #f (map (lambda (other) (bound-identifier=? ident other -1)) id-list))
+      (foldl or-func #f (map (lambda (other) (free-identifier=? ident other -1)) id-list))
       #f
   ))
   
@@ -55,56 +55,83 @@
 ; ~! means "if you get to here, don't consider any other possible forms
 ;           and fail if it doesn't end up matching"
 (define (boxer-unboxer-helper stx boxed-vars)
-  (define new-boxed-vars  boxed-vars)
-  (cons (syntax-parse stx
-    ; define-values
-    [((~literal define-values #:phase -1) ~! (var:identifier ...) vals:expr)
-     ; Necessary so that functions that return multiple values get their values boxed properly.
-     ; NOTE: values are not the same as arguments. You can't just use a function that takes multiple
-     ; arguments on a `multiple value` multiple values are stored in the same argument. It's weird.
-     #:do [(set! new-boxed-vars (append new-boxed-vars (syntax->list #'(var ...))))]
-     #:with boxed-unboxed (let ([boxed-result (boxer-unboxer-helper #'vals new-boxed-vars)])
-                            (set! new-boxed-vars (cdr boxed-result))
-                            (car boxed-result)
-                            )
-     ;(print #'boxed-unboxed)
-     (replace-context stx #`(define-values (var ...) #,(map-values #'(box boxed-unboxed))))]
+  (define new-boxed-vars boxed-vars)
+  (cons
+   (syntax-parse stx
+     ; define-values
+     [((~literal define-values #:phase -1) ~! (var:identifier ...) vals:expr)
+      ; Necessary so that functions that return multiple values get their values boxed properly.
+      ; NOTE: values are not the same as arguments. You can't just use a function that takes multiple
+      ; arguments on a `multiple value` multiple values are stored in the same argument. It's weird.
+      #:do [(set! new-boxed-vars (append new-boxed-vars (syntax->list #'(var ...))))]
+      #:with boxed-unboxed (let ([boxed-result (boxer-unboxer-helper #'vals new-boxed-vars)])
+                             (set! new-boxed-vars (cdr boxed-result))
+                             (car boxed-result)
+                             )
+      ;(print #'boxed-unboxed)
+      
+      (replace-context stx #`(define-values (var ...) #,(map-values #'(box boxed-unboxed))))]
+     
 
-    
-    ; let-values
-    [((~literal let-values #:phase -1) ~! ([(var:identifier ...) vals:expr] ...) body ...)
-     #:do [(set! new-boxed-vars (append new-boxed-vars (syntax->list #'(var ... ...))))]
-     #:with (transformed-vals ...) (car (boxer-unboxer-helper #'(vals ...) boxed-vars))
-     ;(box-unbox-map-stx stx #'(vals ...) new-boxed-vars)
-     #:with (boxed-vals ...) #`(#,@(map (lambda (v) (replace-context stx (map-values #`(box #,v))))
-                                (syntax->list #'(transformed-vals ...))))
-     #:with (transformed-body ...) (car (boxer-unboxer-helper #'(body ...) new-boxed-vars))
-     ;(box-unbox-map-stx stx #'(body ...) new-boxed-vars)
-     ;(print #'(vals ...))
-     ;(print #'(transformed-vals ...))
-     (replace-context stx #'(let-values ([(var ...) boxed-vals] ...) transformed-body ...))]
+     ; Function Calls
+     ; If the function we're calling is one of our boxed functions, then
+     ; make sure all of the arguments passed to it have been boxed.
+     ; If it's a racket function, make sure all arguments passed to it are unboxed.
+     ; Note that since we apply boxer-unboxer to each argument, they are all unboxed
+     ; by the time the function is called.
+     [((~literal #%app #:phase -1) ~! function arg ...)
+      #:with (transformed-arg ...) (car (boxer-unboxer-helper #'(arg ...) new-boxed-vars))
+      #:with (boxed-arg ...) #'((box transformed-arg) ...)
+      #:with unboxed-func (car (boxer-unboxer-helper #'function new-boxed-vars))
 
-    ; set!
-    [((~literal set! #:phase -1) ~! var:identifier val:expr)
-     #:with to-set-as (boxer-unboxer-helper #'val new-boxed-vars)
-     (replace-context stx #'(set-box! var to-set-as))]
-    
-    [(any ...)
-     #:with recursed #`(#,@(let ([stx-list (syntax->list #'(any ...))])
-                                              (for/list ([stx-item stx-list])
-                                              ;(print vars-list)
-                                              
-                                              (let* ([result (boxer-unboxer-helper stx-item new-boxed-vars)]
-                                                     [new-stx (car result)])
-                                                (set! new-boxed-vars (cdr result))
-                                                new-stx))))
+      (if (identifier-in-list #'function new-boxed-vars)
+          ; Then we are dealing with one of our functions,
+          ; which needs all arguments boxed
+          (replace-context stx #'(#%app unboxed-func boxed-arg ...))
+          ; Else, we are dealing with a base racket function,
+          ; which means we pass in unboxed values
+          (replace-context stx #'(#%app unboxed-func transformed-arg ...))
+          )]
 
-     ;(map (lambda (x) (boxer-unboxer-helper x new-boxed-vars)) (syntax-e #`(any ...)))
-     (replace-context stx #'recursed)]
-    [single (if (identifier-in-list #'single new-boxed-vars)
-                (unbox-stx #'single)
-                #'single)]
-    ) new-boxed-vars)
+     ; Function Declarations
+     ; All variables given to the function are assumed to have been boxed by
+     ; the Function Calls handler above.
+     ;[((~literal 
+     
+     ; let-values
+     [((~literal let-values #:phase -1) ~! ([(var:identifier ...) vals:expr] ...) body ...)
+      #:do [(set! new-boxed-vars (append new-boxed-vars (syntax->list #'(var ... ...))))]
+      #:with (transformed-vals ...) (car (boxer-unboxer-helper #'(vals ...) boxed-vars))
+      ;(box-unbox-map-stx stx #'(vals ...) new-boxed-vars)
+      #:with (boxed-vals ...) #`(#,@(map (lambda (v) (replace-context stx (map-values #`(box #,v))))
+                                         (syntax->list #'(transformed-vals ...))))
+      #:with (transformed-body ...) (car (boxer-unboxer-helper #'(body ...) new-boxed-vars))
+      ;(box-unbox-map-stx stx #'(body ...) new-boxed-vars)
+      ;(print #'(vals ...))
+      ;(print #'(transformed-vals ...))
+      (replace-context stx #'(let-values ([(var ...) boxed-vals] ...) transformed-body ...))]
+     
+     ; set!
+     [((~literal set! #:phase -1) ~! var:identifier val:expr)
+      #:with to-set-as (boxer-unboxer-helper #'val new-boxed-vars)
+      (replace-context stx #'(set-box! var to-set-as))]
+     
+     [(any ...)
+      #:with recursed #`(#,@(let ([stx-list (syntax->list #'(any ...))])
+                              (for/list ([stx-item stx-list])
+                                ;(print vars-list)
+                                
+                                (let* ([result (boxer-unboxer-helper stx-item new-boxed-vars)]
+                                       [new-stx (car result)])
+                                  (set! new-boxed-vars (cdr result))
+                                  new-stx))))
+      
+      ;(map (lambda (x) (boxer-unboxer-helper x new-boxed-vars)) (syntax-e #`(any ...)))
+      (replace-context stx #'recursed)]
+     [single (if (identifier-in-list #'single new-boxed-vars)
+                 (unbox-stx #'single)
+                 #'single)]
+     ) new-boxed-vars)
   )
 
 (define (boxer-unboxer stx)

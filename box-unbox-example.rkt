@@ -3,9 +3,12 @@
 
 ;(require rackunit)
 ;(- 4 5)
-(let ([x 4] [y 5])
-  (+ x y)
-  )
+;(let ([f (lambda (x) (print x))])
+  ;(f 4)
+  ;)
+;(print "Hello")
+(define (f x) (print x))
+(f "hi")
 
 ;(check-equal? #t #t)
 ;(define x 12)
