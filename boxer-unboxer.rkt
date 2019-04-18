@@ -102,13 +102,14 @@
      ; All variables given to the function are assumed to have been boxed by
      ; the Function Calls handler above.
      ; TODO: Make it work for rest
-     [((~literal #%plain-lambda #:phase -1) ~! f:formals body ...+)
+     [((~literal #%plain-lambda #:phase 1) ~! f:formals body ...+)
       #:with (transformed-body ...) (car (boxer-unboxer-helper
                                           #'(body ...)
                                           (append new-boxed-vars (syntax->list #'f.args))))
+      ;(print "got plain-lambda")
       (replace-context stx #'(#%plain-lambda f.args transformed-body ...))]
 
-     [((~literal case-lambda #:phase -1) ~! [f:formals body ...+] ...)
+     [((~literal case-lambda #:phase 1) ~! [f:formals body ...+] ...)
       #:with ([transformed-body ...] ...)
       (map-stx stx (lambda (f-body)
                      (syntax-parse f-body
@@ -118,6 +119,7 @@
                               (append new-boxed-vars (syntax->list #'fname.args))))]
                         )
                      ) #'([f body ...] ...))
+      (print "got case-lambda")
       (replace-context stx #'(case-lambda [f transformed-body ...] ...))]
       
      

@@ -2,15 +2,17 @@
 
 (define (test a) (print a))
 
+(test "hello")
+(lambda (a) a)
 
-((#%plain-lambda rest (print rest)) (list 1 2 3))
+;((#%plain-lambda rest (print rest)) 1 2 3)
 
 
 ;(require rackunit)
 ;(- 4 5)
-;(let ([f (lambda (x) (print x))])
-  ;(f 4)
-  ;)
+(let ([f (lambda (x) (print x))])
+  (f 4)
+  )
 ;(print "Hello")
 ;(#%plain-lambda (x) x)
 ;(let ([f (case-lambda
